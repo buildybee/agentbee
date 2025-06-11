@@ -20,8 +20,6 @@ git clone https://github.com/buildybee/agentbee.git
 cd agentbee
 ```
 
-Replace `https://github.com/buildybee/agentbee.git` with the actual repository URL.
-
 ### 2. Installation
 
 It is highly recommended to use a virtual environment. Then, install the dependencies using pip:

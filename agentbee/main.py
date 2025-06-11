@@ -8,7 +8,6 @@ from .core import accumulator, file_io, llm_api, runner
 
 app = typer.Typer(help="🐝 AgentBee: An AI-powered code assistant.")
 
-# --- Shared Options ---
 FreshOption = Annotated[bool, typer.Option("--fresh", help="Start with a fresh log file, deleting the old one.")]
 NoScrubOption = Annotated[bool, typer.Option("--no-scrub", help="Include comments in the accumulated code.")]
 PathOption = Annotated[Path, typer.Option("--path", help="Scan a specific relative path instead of using 'git ls-files'.")]
@@ -16,7 +15,7 @@ PathOption = Annotated[Path, typer.Option("--path", help="Scan a specific relati
 
 @app.callback()
 def main_callback():
-    """Manage global state and configurations."""
+    
     pass
 
 @app.command()
@@ -25,7 +24,7 @@ def accumulate(
     no_scrub: NoScrubOption = False,
     fresh: FreshOption = False
 ):
-    """Gathers code from files and saves it to a log without calling an API."""
+    
     logger.setup_logging(fresh)
     try:
         project_root = accumulator.get_project_root()
@@ -45,7 +44,7 @@ def assist(
     no_scrub: NoScrubOption = False,
     fresh: FreshOption = False  # Changed from FreshFlag to FreshOption
 ):
-    """Assist with code generation or modification using AI."""
+    
     logger.setup_logging(fresh)
     api_response = None
     accumulated_code = ""
@@ -89,7 +88,7 @@ def auto(
     max_iterations: Annotated[int, typer.Option("--max-iterations", help="Maximum number of attempts.")] = 5,
     fresh: FreshOption = False
 ):
-    """Automatically fix code using a test script as verification."""
+    
     logger.setup_logging(fresh)
     if not test_script.exists():
         print(f"🚨 Error: Test script not found at '{test_script}'")
@@ -106,7 +105,7 @@ def auto(
 
 @app.command("show")
 def show_config():
-    """Displays the current configuration."""
+    
     cfg = config.load_config()
     if not cfg or not any(cfg.values()):
         print(f"No configuration found. Please run 'agentbee config set'.")
@@ -119,6 +118,23 @@ def show_config():
         
         for key, value in cfg.items():
             print(f"  - {key}: {value}")
+
+@app.command()
+def config_set(
+    api_key: Annotated[str, typer.Option(help="Your LLM API key.")] = "",
+    base_url: Annotated[str, typer.Option(help="The base URL of the LLM API.")] = "",
+    model: Annotated[str, typer.Option(help="The LLM model to use.")] = "",
+):
+    """Sets the configuration for AgentBee."""
+    # Prompt for missing configurations
+    if not api_key:
+        api_key = typer.prompt("Please enter your LLM API key")
+    if not base_url:
+        base_url = typer.prompt("Please enter the LLM API base URL")
+    if not model:
+        model = typer.prompt("Please enter the LLM model name")
+
+    config.save_config(api_key, base_url, model)
 
 if __name__ == "__main__":
     app()

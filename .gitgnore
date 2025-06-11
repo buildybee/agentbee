@@ -1,2 +1,4 @@
-.bee**
+*.beecode.d/** */
 __pycahe__
+*.log
+agentbee.egg-info/** */

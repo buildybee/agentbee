@@ -1,4 +1,3 @@
-# agentbee/core/accumulator.py
 import os
 import subprocess
 from pathlib import Path

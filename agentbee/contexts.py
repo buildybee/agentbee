@@ -11,7 +11,7 @@ Please structure your code in format as
         file_path: path, 
         code: code_content
     }
-] , so that its easy to patch the code.Serialize this code_content into a JSON-safe format.
+] , so that its easy to patch the code.Serialize this code_content into a JSON-safe format and ensure every " is escaped with \"
 """
 
 AUTO_CONTEXT_INITIAL = """

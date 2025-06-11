@@ -1,4 +1,3 @@
-# agentbee/main.py
 import os
 import typer
 from pathlib import Path

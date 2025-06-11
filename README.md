@@ -58,12 +58,12 @@ This will gather all files tracked by git (or a specified path via `--path`) and
 To get assistance with a specific task, use the `assist` command:
 
 ```bash
-agentbee assist "Refactor the user authentication module to use JWTs." --output beecode.d
+agentbee assist "Refactor the user authentication module to use JWTs."
 ```
 
-This will send your instructions and the accumulated code to the LLM, and save the changes to the `beecode.d` directory.
+This will send your instructions and the accumulated code to the LLM, and save the changes to the `.beecode.d` directory.
 
-#### Automated Workflow
+#### Automated Workflow(WIP)
 
 To run an automated workflow with a test script, use the `auto` command:
 

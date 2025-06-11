@@ -8,7 +8,7 @@ def get_project_root() -> Path:
     """Finds the project root by looking for a .git directory."""
     try:
         # This command asks git for the top-level directory of the current repository.
-        result = subprocess.run(
+        result = subprocess.run(           
             ['git', 'rev-parse', '--show-toplevel'],
             capture_output=True, text=True, check=True,
         )
@@ -40,7 +40,8 @@ def filter_paths_with_patterns(paths: List[Path], patterns: List[str], root: Pat
     filtered = []
     for path in paths:
         # Check if the path matches any of the provided patterns.
-        if any(path.match(str(p)) for p in absolute_patterns):
+        # Ensure the patterns are relative to the root when matching
+        if any(path.match(str((root / p).resolve().relative_to(root.resolve()))) for p in patterns):
             filtered.append(path)
     return filtered
 

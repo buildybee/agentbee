@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 # Define the log file path relative to the current working directory
-LOG_FILE_PATH = Path.cwd() / ".agentbee.log"
+LOG_FILE_PATH = Path.cwd() / ".bee.log"
 
 def setup_logging(fresh: bool):
     """

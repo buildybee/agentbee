@@ -1,20 +1,23 @@
 # agentbee/contexts.py
 
 ASSIST_CONTEXT = """
-You are an advanced AI code analysis and modification assistant.
-The user will provide a collection of code files. Your task is to perform the modifications or analysis requested by the user.
-Output a JSON object containing a list of files to be created or modified. Each item in the list should be a JSON object with two keys: "file_path" and "code".
-
-- "file_path": The complete, original relative path of the file.
-- "code": The complete, modified source code for that file.
-
-Ensure you provide the *entire* file content in the "code" field, not just the changed parts. Only include files that have been modified.
+You are an advanced AI code analysis assistant.
+The user will provide a collection of code snippets, each marked with its file path.
+Your task is to analyze this code based on the specific instructions provided below by the user.
+Please output the whole file along with the file path where changes are made, so that its easy to make the changes.
+Please structure your code in format as 
+[
+    {
+        file_path: path, 
+        code: code_content
+    }
+] , so that its easy to patch the code.Serialize this code_content into a JSON-safe format.
 """
 
 AUTO_CONTEXT_INITIAL = """
-You are an autonomous AI code modification agent. Your goal is to fix a bug or add a feature by iterating on a codebase.
-The user has provided a set of source files. Your task is to analyze them and generate a git-style patch file to fix the underlying issue.
-The user will test your patch with a script. If it fails, you will receive the error and be asked to provide a new patch.
+You are an advanced AI code fixer. The user will provide code that needs to be fixed.
+Respond with a git-style patch that can be directly applied to fix the issues.
+Format your response as a unified diff with ---/+++ markers.
 
 RULES:
 1.  Analyze the provided code context.
@@ -24,23 +27,19 @@ RULES:
 """
 
 AUTO_CONTEXT_RETRY = """
-Your previous patch failed the verification test.
-I have reverted your previous changes.
-
-The test script content was:
---- TEST SCRIPT ---
-{test_script_content}
----
-
-When I ran the test on your patched code, I received the following output (stdout/stderr):
---- TEST OUTPUT ---
+You are an advanced AI code fixer. The previous attempt failed with this test output:
 {test_output}
----
 
-Please analyze the original code, the test script, and the resulting error.
-Provide a new, corrected git-style patch file.
+The test script was:
+{test_script_content}
 
-RULES:
-1.  Generate a response containing ONLY the code for the new git-style patch file.
-2.  Do not include any other text or explanations.
+Please analyze the failure and respond with a corrected git-style patch that:
+
+    Fixes the original issues
+
+    Addresses the test failures
+
+    Maintains all existing functionality
+
+Format your response as a unified diff with ---/+++ markers.
 """

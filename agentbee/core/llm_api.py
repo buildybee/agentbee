@@ -1,21 +1,13 @@
-# agentbee/core/llm_api.py
 
 from openai import OpenAI
 from typing import Dict
+import json
 
 def call_llm(
     system_prompt: str,
     user_prompt: str,
     config: Dict[str, str]
 ) -> str:
-    """
-    Calls the specified LLM with the given prompts and configuration.
-
-    Args:
-        system_prompt: The system-level instructions for the AI.
-        user_prompt: The user-provided prompt, typically containing the code.
-        config: A dictionary with 'llm_api_key', 'llm_base_url', and 'llm_model'.
-    """
     try:
         client = OpenAI(
             api_key=config['llm_api_key'],
@@ -26,18 +18,34 @@ def call_llm(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
+        print(system_prompt)
+        print(user_prompt)
+
+        
 
         print(f"🤖 Calling model '{config['llm_model']}'...")
 
-        # SIMPLIFIED: Removed the response_format parameter from the call.
         response = client.chat.completions.create(
             model=config['llm_model'],
-            messages=messages
+            messages=messages,
+            response_format={"type": "json_object"},
         )
         
         response_content = response.choices[0].message.content
+        print(response_content)
+        
+        # Validate JSON structure
+        parsed = json.loads(response_content)
+        if not isinstance(parsed, (list, dict)):
+            raise ValueError("Response is not a JSON array or object")
+        
         return response_content
 
+    except json.JSONDecodeError as e:
+        print(f"🚨 JSON Error: {e}\nAttempting to fix response...")
+        # Basic JSON repair attempt
+        fixed = response_content.replace('\\"', '"').replace('\n', '\\n')
+        return json.dumps([{"file_path": "response.json", "code": fixed}])
     except Exception as e:
-        print(f"🚨 An error occurred during the LLM API call: {e}")
+        print(f"🚨 API Error: {e}")
         raise

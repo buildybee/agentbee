@@ -41,16 +41,17 @@ def accumulate(
 @app.command()
 def assist(
     instructions: Annotated[str, typer.Argument(help="Your specific instructions for the AI assistant.")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="Directory to save generated files.")] = Path("output_files"),
+    output: Annotated[Path, typer.Option("-o", "--output", help="Directory to save generated files.")] = Path(".beecode.d"),
     path: PathOption = None,
     no_scrub: NoScrubOption = False,
-    fresh: FreshOption = False
+    fresh: FreshOption = False  # Changed from FreshFlag to FreshOption
 ):
-    """Accumulates code and sends it to the LLM for assistance."""
+    """Assist with code generation or modification using AI."""
     logger.setup_logging(fresh)
     api_response = None
     accumulated_code = ""
     error_message_for_log = None
+    
     try:
         cfg = config.load_config()
         if not all(cfg.values()):
@@ -65,11 +66,7 @@ def assist(
             print("No code accumulated. Exiting.")
             return
 
-        # --- RESTRUCTURED PROMPTS ---
-        # As per your request:
-        # 1. The system prompt now contains the base context AND the full code.
-        # 2. The user prompt is now ONLY the user's instructions.
-        system_prompt = f"{contexts.ASSIST_CONTEXT}\n\n--- FULL CODE CONTEXT ---\n{accumulated_code}"
+        system_prompt = f"{contexts.ASSIST_CONTEXT}\n\n--- CURRENT CODE CONTEXT ---\n{accumulated_code}"
         user_prompt = instructions
 
         print("\n🤖 Sending request to LLM API...")
@@ -77,7 +74,6 @@ def assist(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             config=cfg
-            # REMOVED: json_mode=True is no longer needed
         )
 
         file_io.apply_code_changes(api_response, output)
@@ -88,14 +84,13 @@ def assist(
     finally:
         logger.log_output(accumulated_code, response_data=api_response, error_message=error_message_for_log)
 
-
 @app.command()
 def auto(
     test_script: Annotated[Path, typer.Option("--test", help="Path to the shell script for verification.")],
     max_iterations: Annotated[int, typer.Option("--max-iterations", help="Maximum number of attempts.")] = 5,
     fresh: FreshOption = False
 ):
-    """Automatically attempts to fix code by generating, applying, and testing patches."""
+    """Automatically fix code using a test script as verification."""
     logger.setup_logging(fresh)
     if not test_script.exists():
         print(f"🚨 Error: Test script not found at '{test_script}'")
@@ -110,20 +105,7 @@ def auto(
         print(f"🚨 A critical error occurred in the auto workflow: {e}")
         logger.log_output("", error_message=f"Auto workflow failed: {e}")
 
-# --- Config Subcommand ---
-config_app = typer.Typer(name="config", help="Manage global API configuration.")
-app.add_typer(config_app)
-
-@config_app.command("set")
-def set_config(
-    api_key: Annotated[str, typer.Option("--api-key", help="Your LLM API Key.")],
-    base_url: Annotated[str, typer.Option("--base-url", help="The base URL for the LLM API.")],
-    model: Annotated[str, typer.Option("--model", help="The model name to use (e.g., gpt-4-turbo).")]
-):
-    """Sets the API key, URL, and model in the global config."""
-    config.save_config(api_key, base_url, model)
-
-@config_app.command("show")
+@app.command("show")
 def show_config():
     """Displays the current configuration."""
     cfg = config.load_config()

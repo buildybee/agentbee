@@ -24,9 +24,12 @@ def save_config(api_key: str, base_url: str, model: str):
     print(f"✅ Configuration saved to {CONFIG_FILE}")
 
 def load_config() -> dict:
-    """Loads the configuration from the global config file."""
     if not CONFIG_FILE.exists():
         return {}
     config = configparser.ConfigParser()
     config.read(CONFIG_FILE)
-    return dict(config.get(CONFIG_SECTION, key, fallback=None) for key in ['llm_api_key', 'llm_base_url', 'llm_model'])
+    return {
+        'llm_api_key': config.get(CONFIG_SECTION, 'llm_api_key', fallback=''),
+        'llm_base_url': config.get(CONFIG_SECTION, 'llm_base_url', fallback=''),
+        'llm_model': config.get(CONFIG_SECTION, 'llm_model', fallback='')
+    }

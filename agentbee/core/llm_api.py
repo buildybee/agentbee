@@ -1,4 +1,3 @@
-
 from openai import OpenAI
 from typing import Dict
 import json
@@ -18,10 +17,7 @@ def call_llm(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
-        print(system_prompt)
-        print(user_prompt)
-
-        
+       
 
         print(f"🤖 Calling model '{config['llm_model']}'...")
 
@@ -32,7 +28,7 @@ def call_llm(
         )
         
         response_content = response.choices[0].message.content
-        print(response_content)
+        print("LLM response:\n {}".format(response_content))
         
         # Validate JSON structure
         parsed = json.loads(response_content)

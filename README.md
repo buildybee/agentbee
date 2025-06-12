@@ -36,7 +36,7 @@ pip install -e .
 Before using AgentBee, you need to configure your API credentials. Run the following command and provide the requested information:
 
 ```bash
-agentbee config set
+agentbee config-set
 ```
 
 You'll be prompted to enter your LLM API key, base URL, and model name.  AgentBee stores this configuration in `~/.agentbee/config.ini`.

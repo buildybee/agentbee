@@ -1,6 +1,6 @@
 [project]
 name = "agentbee"
-version = "1.0.1"
+version = "0.0.1"
 description = "An AI-powered code assistant to analyze, assist with, and automate code modifications."
 readme = "README.md"
 requires-python = ">=3.8"

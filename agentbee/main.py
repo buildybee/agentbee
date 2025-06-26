@@ -2,9 +2,10 @@ import os
 import typer
 from pathlib import Path
 from typing_extensions import Annotated
+from langchain_core.runnables import RunnableLambda
 
-from . import config, contexts, logger
-from .core import accumulator, file_io, llm_api, runner
+from . import config, logger
+from .core import accumulator, file_io, llm_api, prompts, runner
 
 app = typer.Typer(help="🐝 AgentBee: An AI-powered code assistant.")
 
@@ -24,14 +25,13 @@ def accumulate(
     no_scrub: NoScrubOption = False,
     fresh: FreshOption = False
 ):
-    
-    logger.setup_logging(fresh)
+    runnable = RunnableLambda(runner.accumulate)
     try:
-        project_root = accumulator.get_project_root()
-        file_paths = accumulator.get_file_paths(project_root, path)
-        accumulated_code = file_io.accumulate_code(file_paths, scrub_comments=not no_scrub)
-        logger.log_output(accumulated_code)
-        print(f"\n✅ Accumulated code from {len(file_paths)} files logged to {logger.LOG_FILE_PATH}")
+        runnable_input = {"path":path,"no_scrub":no_scrub}
+        accumulated_script = runnable.invoke(runnable_input)
+        logger.setup_logging(fresh)
+        logger.log_output(accumulated_script)
+        print(f"\n✅ Saved accumulated code logged to {logger.LOG_FILE_PATH}")
     except Exception as e:
         print(f"🚨 Operation failed: {e}")
         logger.log_output("", error_message=str(e))
@@ -64,7 +64,7 @@ def assist(
             print("No code accumulated. Exiting.")
             return
 
-        system_prompt = f"{contexts.ASSIST_CONTEXT}\n\n--- CURRENT CODE CONTEXT ---\n{accumulated_code}"
+        system_prompt = f"{prompts.ASSIST_CONTEXT}\n\n--- CURRENT CODE CONTEXT ---\n{accumulated_code}"
         user_prompt = instructions
 
         print("\n🤖 Sending request to LLM API...")

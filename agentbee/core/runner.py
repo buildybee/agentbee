@@ -1,7 +1,9 @@
 import subprocess
 from pathlib import Path
+from langchain_core.runnables import RunnableLambda
+from pathlib import Path
 
-from .. import config, contexts, logger
+from .. import config, logger
 from . import accumulator, file_io, llm_api
 
 def run_auto_workflow(test_script_path: Path, max_iterations: int):
@@ -77,3 +79,12 @@ def run_auto_workflow(test_script_path: Path, max_iterations: int):
 
     print(f"\n--- 🛑 FAILED ---")
     print(f"Could not fix the code within the {max_iterations} iteration limit.")
+
+def accumulate(runnable_input: dict):
+    path = runnable_input.get("path",None)
+    no_scrub = runnable_input.get("no_scrub", False)
+    project_root = accumulator.get_project_root()
+    file_paths = accumulator.get_file_paths(project_root, path)
+    accumulated_code = file_io.accumulate_code(file_paths, scrub_comments=not no_scrub)
+    print(f"\n✅ Accumulated code from {len(file_paths)} files")
+    return(accumulated_code)

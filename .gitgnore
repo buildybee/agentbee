@@ -1,4 +1,11 @@
-*.beecode.d/** */
-__pycahe__
+# Python bytecode
+__pycache__/
+
+# Distribution / packaging
+*.egg-info/
+
+# Logs
 *.log
-agentbee.egg-info/** */
+
+# Your other rules
+*.beecode.d/**/

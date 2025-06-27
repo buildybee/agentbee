@@ -2,10 +2,14 @@ import os
 import typer
 from pathlib import Path
 from typing_extensions import Annotated
+from functools import partial
 from langchain_core.runnables import RunnableLambda
+from langchain_core.output_parsers import StrOutputParser
+from langchain_google_genai import GoogleGenerativeAI
+from langchain_ollama import ChatOllama
 
 from . import config, logger
-from .core import accumulator, file_io, llm_api, prompts, runner
+from .core import accumulator, file_io, llm_api, prompts, runner, parser
 
 app = typer.Typer(help="🐝 AgentBee: An AI-powered code assistant.")
 
@@ -16,7 +20,6 @@ PathOption = Annotated[Path, typer.Option("--path", help="Scan a specific relati
 
 @app.callback()
 def main_callback():
-    
     pass
 
 @app.command()
@@ -35,7 +38,8 @@ def accumulate(
     except Exception as e:
         print(f"🚨 Operation failed: {e}")
         logger.log_output("", error_message=str(e))
-
+    return accumulated_script
+    
 @app.command()
 def assist(
     instructions: Annotated[str, typer.Argument(help="Your specific instructions for the AI assistant.")],
@@ -56,31 +60,71 @@ def assist(
             print("🚨 API configuration is incomplete. Please run 'agentbee config set --help'.")
             return
 
-        project_root = accumulator.get_project_root()
-        file_paths = accumulator.get_file_paths(project_root, path)
-        accumulated_code = file_io.accumulate_code(file_paths, scrub_comments=not no_scrub)
+        # Create the runnable components
+        coding_model = GoogleGenerativeAI(model="gemini-2.0-flash", temperature=0, api_key=llm_api.get_api_key())
+        local_model = ChatOllama(model="phi3.5:latest", temperature=0)
+        assist_prompt = prompts.get_assist_prompt()
+        code_parser = parser.get_scripts_list_parser()        
+        fix_json_prompt = prompts.fix_json_prompt()
+        code_accumulator = RunnableLambda(runner.accumulate)
+        model_logger = RunnableLambda(runner.log_model_output)
+        markdown_cleaner = RunnableLambda(runner.clean_markdown_json)
+        script_saver = RunnableLambda(runner.save_script)    
 
-        if not accumulated_code.strip():
-            print("No code accumulated. Exiting.")
-            return
-
-        system_prompt = f"{prompts.ASSIST_CONTEXT}\n\n--- CURRENT CODE CONTEXT ---\n{accumulated_code}"
-        user_prompt = instructions
-
-        print("\n🤖 Sending request to LLM API...")
-        api_response = llm_api.call_llm(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            config=cfg
+        # The main parsing chain that takes the model's raw string output
+        code_parser_chain = markdown_cleaner | code_parser
+        
+        # The fallback "fixer" chain for when the main parser fails
+        json_fixer_chain = (
+            RunnableLambda(lambda x: print("🔴 Code Parsing failed. Trying to fix with local model..."))
+            | RunnableLambda(lambda x: {"input": x})  # Wrap the faulty string for the prompt
+             | fix_json_prompt
+             | local_model
+             | StrOutputParser()
+             | markdown_cleaner
+             | code_parser
+        )
+        
+        # Create a resilient parser by attaching the fallback
+        code_parser_with_fallback = code_parser_chain.with_fallbacks(
+            fallbacks=[json_fixer_chain],
         )
 
-        file_io.apply_code_changes(api_response, output)
+        # Create a pre-configured formatter using partial
+        data_formatter = RunnableLambda(
+            partial(runner.format_for_prompt, 
+                   instructions=instructions,
+                   format_instructions=code_parser.get_format_instructions())
+        )
+
+        # Assemble the full chain
+        assist_chain = (
+            code_accumulator 
+            | data_formatter 
+            | assist_prompt 
+            | coding_model 
+            | model_logger 
+            | code_parser_with_fallback # Use the parser with the self-healing fallback
+            | script_saver
+        )
+        
+        # Prepare input for the chain
+        runnable_input = {
+            "path": path,
+            "no_scrub": no_scrub,
+            "instructions": instructions
+        }
+        
+        # Execute the chain
+        api_response = assist_chain.invoke(runnable_input)
+        
+        print(f"\n✅ Code generation completed and saved")
 
     except Exception as e:
         error_message_for_log = str(e)
         print(f"🚨 Operation failed: {e}")
-    finally:
-        logger.log_output(accumulated_code, response_data=api_response, error_message=error_message_for_log)
+    # finally:
+    #     logger.log_output(accumulated_code, response_data=api_response, error_message=error_message_for_log)
 
 @app.command()
 def auto(
@@ -88,20 +132,7 @@ def auto(
     max_iterations: Annotated[int, typer.Option("--max-iterations", help="Maximum number of attempts.")] = 5,
     fresh: FreshOption = False
 ):
-    
-    logger.setup_logging(fresh)
-    if not test_script.exists():
-        print(f"🚨 Error: Test script not found at '{test_script}'")
-        return
-
-    try:
-        runner.run_auto_workflow(
-            test_script_path=test_script,
-            max_iterations=max_iterations,
-        )
-    except Exception as e:
-        print(f"🚨 A critical error occurred in the auto workflow: {e}")
-        logger.log_output("", error_message=f"Auto workflow failed: {e}")
+    pass
 
 @app.command("show")
 def show_config():

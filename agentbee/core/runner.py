@@ -4,81 +4,8 @@ from langchain_core.runnables import RunnableLambda
 from pathlib import Path
 
 from .. import config, logger
-from . import accumulator, file_io, llm_api
-
-def run_auto_workflow(test_script_path: Path, max_iterations: int):
-    cfg = config.load_config()
-    if not all(cfg.values()):
-        print("🚨 API configuration is incomplete. Please run 'agentbee config set --help'.")
-        return
-
-    project_root = accumulator.get_project_root()
-    
-    print("--- 🐝 Starting Auto-Fix Workflow ---")
-    
-    file_paths = accumulator.get_file_paths(project_root, path_option=None)
-    initial_code = file_io.accumulate_code(file_paths, scrub_comments=False)
-    
-    if not initial_code.strip():
-        print("No code found to process. Exiting.")
-        return
-
-    test_script_content = test_script_path.read_text()
-
-    current_user_prompt = initial_code
-    error_output = ""
-
-    for i in range(max_iterations):
-        iteration = i + 1
-        print(f"\n--- 🔄 Iteration {iteration}/{max_iterations} ---")
-
-        if iteration == 1:
-            system_prompt = contexts.AUTO_CONTEXT_INITIAL
-        else:
-            system_prompt = contexts.AUTO_CONTEXT_RETRY.format(
-                test_script_content=test_script_content,
-                test_output=error_output
-            )
-        
-        patch_content = llm_api.call_llm(
-            system_prompt=system_prompt,
-            user_prompt=current_user_prompt,
-            config=cfg,
-        )
-        logger.log_output(current_user_prompt, patch_content)
-
-        if not patch_content or not "--- a/" in patch_content:
-             print("⚠️ LLM did not return a valid patch. Skipping iteration.")
-             error_output = "LLM did not return a valid patch."
-             continue
-
-        patch_result = file_io.apply_patch(patch_content, project_root)
-        if patch_result.returncode != 0:
-            print("🚨 Failed to apply the patch:")
-            print(patch_result.stderr)
-            error_output = f"The generated patch could not be applied:\n{patch_result.stderr}"
-            continue
-
-        print(f"🔬 Running verification script: {test_script_path}")
-        test_result = subprocess.run(
-            [test_script_path.as_posix()],
-            shell=True, capture_output=True, text=True, cwd=project_root
-        )
-
-        if test_result.returncode == 0:
-            print("\n--- ✅ SUCCESS! ---")
-            print("Verification test passed. The patch has been successfully applied.")
-            logger.log_output("Final state", f"SUCCESS on iteration {iteration}.\nPatch applied:\n{patch_content}")
-            return
-        else:
-            print(f"--- ❌ TEST FAILED (Iteration {iteration}) ---")
-            error_output = f"STDOUT:\n{test_result.stdout}\n\nSTDERR:\n{test_result.stderr}"
-            print(error_output)
-            file_io.revert_patch(project_root)
-            current_user_prompt = error_output
-
-    print(f"\n--- 🛑 FAILED ---")
-    print(f"Could not fix the code within the {max_iterations} iteration limit.")
+from . import accumulator, file_io, llm_api, parser
+from typing import List,Dict
 
 def accumulate(runnable_input: dict):
     path = runnable_input.get("path",None)
@@ -88,3 +15,77 @@ def accumulate(runnable_input: dict):
     accumulated_code = file_io.accumulate_code(file_paths, scrub_comments=not no_scrub)
     print(f"\n✅ Accumulated code from {len(file_paths)} files")
     return(accumulated_code)
+
+def format_for_prompt(accumulated_code, instructions, format_instructions):
+    """Transform accumulated code and instructions into prompt format"""
+    return {
+        "code_content": accumulated_code,
+        "query": instructions,
+        "format_instructions": format_instructions
+    }
+
+def log_model_output(model_response: str) -> str:
+    """A utility to print the model's raw output for debugging."""
+    print(f"\n🤖 Model Output:")
+    print("=" * 50)
+    print(model_response)
+    print("=" * 50)
+    return model_response
+
+def clean_markdown_json(model_response: str) -> str:
+    """
+    Safely clean JSON from markdown code blocks and extract scripts array.
+    This function avoids using regex to prevent corrupting the inner code.
+    """
+    import json
+    
+    # Copy the response to avoid modifying the original
+    cleaned_response = model_response.strip()
+    
+    # Safely remove the prefix and suffix
+    if cleaned_response.startswith("```json"):
+        cleaned_response = cleaned_response[len("```json"):].strip()
+    elif cleaned_response.startswith("```"):
+        cleaned_response = cleaned_response[len("```"):].strip()
+        
+    if cleaned_response.endswith("```"):
+        cleaned_response = cleaned_response[:-len("```")].strip()
+        
+    # Now that the outer markdown is stripped, we can process the JSON
+    try:
+        parsed = json.loads(cleaned_response)
+        if isinstance(parsed, dict) and 'scripts' in parsed:
+            return json.dumps(parsed['scripts'])
+        else:
+            return cleaned_response
+    except json.JSONDecodeError:
+        return cleaned_response
+
+def save_script(parsed_response):
+    """
+    Save parsed scripts to files, ensuring paths are correctly resolved
+    relative to the project root.
+    """
+    project_root = accumulator.get_project_root()
+    
+    for script in parsed_response.root:
+        model_path = Path(script.file_path)
+        
+        # Determine the correct relative path
+        if model_path.is_absolute():
+            # If the path from the model is absolute, make it relative to the project root
+            try:
+                relative_path = model_path.relative_to(project_root)
+            except ValueError:
+                # Fallback for absolute paths outside the project, use only the name
+                relative_path = model_path.name
+        else:
+            # If the path is already relative, use it as is
+            relative_path = model_path
+
+        # The save function constructs the full path inside .beecode.d
+        file_io.save_code_to_beecode(
+            Path(relative_path),
+            script.code_content
+        )
+    return parsed_response

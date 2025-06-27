@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="agentbee",
-    version="0.0.1",
+    version="0.0.3",
     author="buildybee",
     author_email="paul.sayan@gmail.com",
     description="An AI-powered code assistant to analyze, assist with, and automate code modifications.",
@@ -23,6 +23,13 @@ setup(
         "typer[all]",
         "openai",
         "python-dotenv",
+        "langchain",
+        "langchain-google-genai",
+        "langchain-core",
+        "langchain-community",
+        "langchain-openai",
+        "langchain-ollama",
+        "pydantic",
     ],
     entry_points={
         "console_scripts": [

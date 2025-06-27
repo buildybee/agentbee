@@ -3,6 +3,7 @@ import re
 import subprocess
 from pathlib import Path
 from typing import List, Union, Dict, Any
+from . import accumulator
 
 COMMENT_PATTERNS = {
     '.py': ['#'], '.sh': ['#'], '.js': ['//'], '.ts': ['//'], '.java': ['//'], '.c': ['//'], 
@@ -18,89 +19,21 @@ MULTI_LINE_COMMENT_DELIMITERS = {
     '.py': [('"""', '"""'), ("'''", "'''")]
 }
 
-def extract_valid_json(response: str) -> Union[Dict, List]:
-    """Extracts and validates JSON from LLM response with multiple fallback strategies."""
-    try:
-        parsed = json.loads(response)
-        
-        # Normalize to always return a list of file objects
-        if isinstance(parsed, dict):
-            if 'file_path' in parsed and 'code' in parsed:
-                return [parsed]
-            return [{
-                "file_path": "response.json",
-                "code": json.dumps(parsed, indent=2)
-            }]
-        elif isinstance(parsed, list):
-            # Validate each item has required fields
-            valid_files = []
-            for item in parsed:
-                if isinstance(item, dict) and 'file_path' in item and 'code' in item:
-                    valid_files.append({
-                        "file_path": str(item['file_path']),
-                        "code": str(item['code'])
-                    })
-            return valid_files if valid_files else [{
-                "file_path": "invalid_response.json",
-                "code": response
-            }]
-        return [{
-            "file_path": "response.txt",
-            "code": response
-        }]
+def save_code_to_beecode(relative_path: Path, code_content: str):
+    """Saves code to a specific path inside the .beecode.d directory."""
+    prefix_dir = "beecode.d"
+    project_dir = accumulator.get_project_root()
     
-    except json.JSONDecodeError:
-        # Try extracting from markdown code block
-        code_blocks = re.findall(r'```(?:json)?\n(.*?)\n```', response, re.DOTALL)
-        if code_blocks:
-            try:
-                return extract_valid_json(code_blocks[0])
-            except json.JSONDecodeError:
-                pass
-        
-        # Final fallback
-        return [{
-            "file_path": "fallback_response.txt",
-            "code": response
-        }]
-
-def apply_code_changes(json_response_str: str, output_dir: Path) -> List[str]:
-    """Safely applies code changes from LLM response."""
-    try:
-        files_data = extract_valid_json(json_response_str)
-        created_files = []
-
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        for file_data in files_data:
-            file_path = file_data.get("file_path", "").strip()
-            code_content = file_data.get("code", "")
-            
-            if not file_path:
-                continue
-
-            # Secure path handling
-            dest_path = (output_dir / file_path.lstrip('/')).resolve()
-            try:
-                if not dest_path.is_relative_to(output_dir.resolve()):
-                    print(f"🚨 Security: Skipping path outside output dir: {file_path}")
-                    continue
-            except RuntimeError:
-                continue
-
-            # Write file
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            dest_path.write_text(code_content, encoding='utf-8')
-            created_files.append(str(dest_path))
-            print(f"✓ Created: {dest_path}")
-
-        print(f"\n🎉 Successfully created {len(created_files)} files")
-        return created_files
-
-    except Exception as e:
-        print(f"🚨 Error applying changes: {e}")
-        raise
+    # Construct the full path for saving the file
+    full_save_path = project_dir / prefix_dir / relative_path
     
+    # Create the parent directory if it doesn't exist
+    full_save_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Write the code to the file
+    full_save_path.write_text(code_content, encoding='utf-8')
+    print(f"\n🎉 Successfully Created: {full_save_path}")
+
 def accumulate_code(file_paths: List[Path], scrub_comments: bool) -> str:
     """Accumulates code from multiple files, optionally scrubbing comments."""
     code_accumulation = []
@@ -147,17 +80,17 @@ def accumulate_code(file_paths: List[Path], scrub_comments: bool) -> str:
 
     return "".join(code_accumulation)
 
-def apply_patch(patch_content: str, root: Path) -> subprocess.CompletedProcess:
-    """Applies a git patch to the codebase."""
-    print("Applying patch...")
-    return subprocess.run(
-        ['git', 'apply', '--ignore-whitespace'],
-        input=patch_content, text=True, cwd=root,
-        capture_output=True
-    )
+# def apply_patch(patch_content: str, root: Path) -> subprocess.CompletedProcess:
+#     """Applies a git patch to the codebase."""
+#     print("Applying patch...")
+#     return subprocess.run(
+#         ['git', 'apply', '--ignore-whitespace'],
+#         input=patch_content, text=True, cwd=root,
+#         capture_output=True
+#     )
 
-def revert_patch(root: Path):
-    """Reverts all changes in the git repository."""
-    print("⚠️ Reverting changes...")
-    subprocess.run(['git', 'checkout', '--', '.'], cwd=root, check=True)
-    subprocess.run(['git', 'clean', '-fd'], cwd=root, check=True)
+# def revert_patch(root: Path):
+#     """Reverts all changes in the git repository."""
+#     print("⚠️ Reverting changes...")
+#     subprocess.run(['git', 'checkout', '--', '.'], cwd=root, check=True)
+#     subprocess.run(['git', 'clean', '-fd'], cwd=root, check=True)
